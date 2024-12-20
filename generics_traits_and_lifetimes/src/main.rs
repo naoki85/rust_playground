@@ -45,7 +45,7 @@ fn main() {
     println!("1 new article: {}", news_article.summarize());
 }
 
-use std::fmt::Display;
+// use std::fmt::Display;
 
 // fn longest_with_an_announcement<'a, T>(x: &'a str, y: &'a str, ann: T) -> &'a str
 // where
