@@ -29,7 +29,7 @@ fi
 
 cd $HOME_PATH
 
-if [ ! -d $MAKEFILE_PATH ]; then
+if [ ! -f $MAKEFILE_PATH ]; then
   echo "downloading Makefile ..."
   wget https://raw.githubusercontent.com/hikalium/wasabi/for_saba/external_app_template/Makefile
 fi
