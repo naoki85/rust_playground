@@ -33,14 +33,14 @@ impl ComputedStyle {
         self.background_color = Some(color);
     }
 
-    pub fn background_color(&mut self) -> Color {
+    pub fn background_color(&self) -> Color {
         self.background_color.clone().expect("failed to access CSS property: background_color")
     }
     pub fn set_color(&mut self, color: Color) {
         self.color = Some(color);
     }
 
-    pub fn color(&mut self) -> Color {
+    pub fn color(&self) -> Color {
         self.color.clone().expect("failed to access CSS property: color")
     }
 
@@ -77,7 +77,7 @@ impl ComputedStyle {
     }
 
     pub fn defaulting(&mut self, node: &Rc<RefCell<Node>>, parent_style: Option<ComputedStyle>) {
-        if let Some(mut parent_style) = parent_style {
+        if let Some(parent_style) = parent_style {
             if self.background_color.is_none() && parent_style.background_color() != Color::white() {
                 self.background_color = Some(parent_style.background_color());
             }
@@ -204,7 +204,7 @@ impl Color {
     }
 
     pub fn code_u32(&self) -> u32 {
-       u32::from_str_radix(&self.code, 16).unwrap()
+        u32::from_str_radix(self.code.trim_start_matches('#'), 16).unwrap()
     }
 }
 
