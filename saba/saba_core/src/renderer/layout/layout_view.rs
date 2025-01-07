@@ -7,7 +7,9 @@ use crate::renderer::layout::layout_object::{
     create_layout_object, LayoutObject, LayoutObjectKind, LayoutPoint, LayoutSize,
 };
 use alloc::rc::Rc;
+use alloc::vec::Vec;
 use core::cell::RefCell;
+use crate::display_item::DisplayItem;
 
 #[derive(Debug, Clone)]
 pub struct LayoutView {
@@ -91,6 +93,29 @@ impl LayoutView {
                 Some(n.borrow().size()),
             );
         }
+    }
+
+    fn paint_node(node: &Option<Rc<RefCell<LayoutObject>>>, display_items: &mut Vec<DisplayItem>) {
+        match node {
+            Some(n) => {
+                display_items.extend(n.borrow_mut().paint());
+
+                let first_child = n.borrow().first_child();
+                Self::paint_node(&first_child, display_items);
+
+                let next_sibling = n.borrow().next_sibling();
+                Self::paint_node(&next_sibling, display_items);
+            }
+            None => (),
+        }
+    }
+
+    pub fn paint(&self) -> Vec<DisplayItem> {
+        let mut display_items = Vec::new();
+
+        Self::paint_node(&self.root, &mut display_items);
+
+        display_items
     }
 }
 
