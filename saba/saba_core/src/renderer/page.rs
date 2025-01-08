@@ -2,7 +2,7 @@ use crate::browser::Browser;
 use crate::renderer::dom::node::Window;
 use alloc::rc::Rc;
 use alloc::rc::Weak;
-use alloc::string::{String, ToString};
+use alloc::string::{String};
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use crate::display_item::DisplayItem;
@@ -68,7 +68,7 @@ impl Page {
             None => return,
         };
 
-        let style = match &self.style.clone() {
+        let style = match self.style.clone() {
             Some(style) => style,
             None => return,
         };
