@@ -12,7 +12,10 @@ use noli::sys::wasabi::Api;
 use noli::window::{StringSize, Window};
 use saba_core::browser::Browser;
 use saba_core::constants::*;
+use saba_core::display_item::DisplayItem;
 use saba_core::error::Error;
+use saba_core::http::HttpResponse;
+use saba_core::renderer::layout::computed_style::{FontSize, TextDecoration};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InputMode {
@@ -48,10 +51,13 @@ impl WasabiUI {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub fn start(
+        &mut self,
+        handle_url: fn(String) -> Result<HttpResponse, Error>,
+    ) -> Result<(), Error> {
         self.setup()?;
 
-        self.run_app()?;
+        self.run_app(handle_url)?;
 
         Ok(())
     }
@@ -98,16 +104,22 @@ impl WasabiUI {
         Ok(())
     }
 
-    fn run_app(&mut self) -> Result<(), Error> {
+    fn run_app(
+        &mut self,
+        handle_url: fn(String) -> Result<HttpResponse, Error>,
+    ) -> Result<(), Error> {
         loop {
-            self.handle_mouse_input()?;
-            self.handle_key_input()?;
+            self.handle_key_input(handle_url)?;
+            self.handle_mouse_input(handle_url)?;
         }
 
         Ok(())
     }
 
-    fn handle_mouse_input(&mut self) -> Result<(), Error> {
+    fn handle_mouse_input(
+        &mut self,
+        handle_url: fn(String) -> Result<HttpResponse, Error>,
+    ) -> Result<(), Error> {
         if let Some(MouseEvent { button, position }) = Api::get_mouse_cursor_info() {
             self.window.flush_area(self.cursor.rect());
             self.cursor.set_position(position.x, position.y);
@@ -140,20 +152,39 @@ impl WasabiUI {
                 }
 
                 self.input_mode = InputMode::Normal;
+
+                let position_in_content_area = (
+                    relative_pos.0,
+                    relative_pos.1 - TITLE_BAR_HEIGHT - TITLE_BAR_HEIGHT,
+                );
+                let page = self.browser.borrow().current_page();
+                let next_destination = page.borrow_mut().clicked(position_in_content_area);
+
+                if let Some(url) = next_destination {
+                    self.input_url = url.clone();
+                    self.update_address_bar()?;
+                    self.start_navigation(handle_url, url)?;
+                }
             }
         }
 
         Ok(())
     }
 
-    fn handle_key_input(&mut self) -> Result<(), Error> {
+    fn handle_key_input(
+        &mut self,
+        handle_url: fn(String) -> Result<HttpResponse, Error>,
+    ) -> Result<(), Error> {
         match self.input_mode {
             InputMode::Normal => {
                 let _ = Api::read_key();
             }
             InputMode::Editing => {
                 if let Some(c) = Api::read_key() {
-                    if c == 0x7F as char || c == 0x08 as char {
+                    if c == 0x0A as char {
+                        self.start_navigation(handle_url, self.input_url.clone())?;
+                        self.input_mode = InputMode::Normal;
+                    } else if c == 0x7F as char || c == 0x08 as char {
                         self.input_url.pop();
                         self.update_address_bar()?;
                     } else {
@@ -223,5 +254,116 @@ impl WasabiUI {
         );
 
         Ok(())
+    }
+
+    fn start_navigation(
+        &mut self,
+        handle_url: fn(String) -> Result<HttpResponse, Error>,
+        destination: String,
+    ) -> Result<(), Error> {
+        self.clear_content_area();
+
+        match handle_url(destination) {
+            Ok(response) => {
+                let page = self.browser.borrow().current_page();
+                page.borrow_mut().receive_response(response);
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+
+        self.update_ui()?;
+
+        Ok(())
+    }
+
+    fn clear_content_area(&mut self) -> Result<(), Error> {
+        if self
+            .window
+            .fill_rect(
+                WHITE,
+                0,
+                TOOLBAR_HEIGHT + 2,
+                CONTENT_AREA_WIDTH,
+                CONTENT_AREA_HEIGHT - 2,
+            )
+            .is_err()
+        {
+            return Err(Error::InvalidUI(
+                "failed to clear a content area".to_string(),
+            ));
+        }
+
+        self.window.flush();
+
+        Ok(())
+    }
+
+    fn update_ui(&mut self) -> Result<(), Error> {
+        let display_items = self
+            .browser
+            .borrow()
+            .current_page()
+            .borrow()
+            .display_items();
+
+        for item in display_items {
+            match item {
+                DisplayItem::Text {
+                    text,
+                    style,
+                    layout_point,
+                } => {
+                    if self
+                        .window
+                        .draw_string(
+                            style.color().code_u32(),
+                            layout_point.x() + WINDOW_PADDING,
+                            layout_point.y() + WINDOW_PADDING + TOOLBAR_HEIGHT,
+                            &text,
+                            convert_font_size(style.font_size()),
+                            style.text_decoration() == TextDecoration::Underline,
+                        )
+                        .is_err()
+                    {
+                        return Err(Error::InvalidUI("failed to draw a string".to_string()));
+                    }
+                }
+                DisplayItem::Rect {
+                    style,
+                    layout_point,
+                    layout_size,
+                } => {
+                    if self
+                        .window
+                        .fill_rect(
+                            style.background_color().code_u32(),
+                            layout_point.x() + WINDOW_PADDING,
+                            layout_point.y() + WINDOW_PADDING + TOOLBAR_HEIGHT,
+                            layout_size.width(),
+                            layout_size.height(),
+                        )
+                        .is_err()
+                    {
+                        return Err(Error::InvalidUI("failed to draw a string".to_string()));
+                    }
+                }
+                _ => {
+                    //
+                }
+            }
+        }
+        self.window.flush();
+
+        Ok(())
+    }
+}
+
+fn convert_font_size(size: FontSize) -> StringSize {
+    match size {
+        FontSize::Medium => StringSize::Medium,
+        FontSize::XLarge => StringSize::Large,
+        FontSize::XXLarge => StringSize::XLarge,
     }
 }

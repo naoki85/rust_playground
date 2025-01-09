@@ -1,12 +1,12 @@
+use crate::renderer::html::attribute::Attribute;
+use alloc::format;
 use alloc::rc::Rc;
 use alloc::rc::Weak;
 use alloc::string::String;
 use alloc::vec::Vec;
-use alloc::format;
 use core::cell::RefCell;
 use core::fmt::{Display, Formatter};
 use core::str::FromStr;
-use crate::renderer::html::attribute::Attribute;
 
 #[derive(Debug, Clone, Eq)]
 pub enum NodeKind {
@@ -38,7 +38,10 @@ impl Window {
             document: Rc::new(RefCell::new(Node::new(NodeKind::Document))),
         };
 
-        window.document.borrow_mut().set_window(Rc::downgrade(&Rc::new(RefCell::new(window.clone()))));
+        window
+            .document
+            .borrow_mut()
+            .set_window(Rc::downgrade(&Rc::new(RefCell::new(window.clone()))));
         window
     }
 
@@ -56,7 +59,8 @@ pub struct Element {
 impl Element {
     pub fn new(element_name: &str, attributes: Vec<Attribute>) -> Self {
         Self {
-            kind: ElementKind::from_str(element_name).expect("failed tp convert string to ElementKind"),
+            kind: ElementKind::from_str(element_name)
+                .expect("failed tp convert string to ElementKind"),
             attributes,
         }
     }
@@ -67,16 +71,22 @@ impl Element {
 
     pub fn is_block_element(&self) -> bool {
         match self.kind {
-            ElementKind::Body
-            | ElementKind::H1
-            | ElementKind::H2
-            | ElementKind::P => true,
+            ElementKind::Body | ElementKind::H1 | ElementKind::H2 | ElementKind::P => true,
             _ => false,
         }
     }
 
     pub fn attributes(&self) -> Vec<Attribute> {
         self.attributes.clone()
+    }
+
+    pub fn get_attribute(&self, name: &str) -> Option<String> {
+        for attr in &self.attributes {
+            if attr.name() == name {
+                return Some(attr.value());
+            }
+        }
+        None
     }
 }
 
@@ -184,7 +194,7 @@ impl Node {
     }
 
     pub fn set_first_child(&mut self, first_child: Option<Rc<RefCell<Node>>>) {
-       self.first_child = first_child;
+        self.first_child = first_child;
     }
 
     pub fn first_child(&self) -> Option<Rc<RefCell<Node>>> {
@@ -192,7 +202,7 @@ impl Node {
     }
 
     pub fn set_last_child(&mut self, last_child: Weak<RefCell<Node>>) {
-       self.last_child = last_child;
+        self.last_child = last_child;
     }
 
     pub fn last_child(&self) -> Weak<RefCell<Node>> {
