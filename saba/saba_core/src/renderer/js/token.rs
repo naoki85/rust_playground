@@ -1,10 +1,15 @@
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+
+static RESERVED_WORDS: [&str; 3] = ["var", "function", "return"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Punctuator(char),
     Number(u64),
+    Identifier(String),
+    Keyword(String),
+    StringLiteral(String),
 }
 
 pub struct JsLexer {
@@ -41,6 +46,67 @@ impl JsLexer {
 
         num
     }
+
+    fn contains(&self, keyword: &str) -> bool {
+        for i in 0..keyword.len() {
+            if keyword
+                .chars()
+                .nth(i)
+                .expect("failed to access to i-th char")
+                != self.input[self.pos + i]
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    fn check_reserved_word(&self) -> Option<String> {
+        for word in RESERVED_WORDS {
+            if self.contains(word) {
+                return Some(word.to_string());
+            }
+        }
+
+        None
+    }
+
+    fn consume_identifier(&mut self) -> String {
+        let mut result = String::new();
+
+        loop {
+            if self.pos >= self.input.len() {
+                return result;
+            }
+
+            if self.input[self.pos].is_alphabetic() || self.input[self.pos] == '$' {
+                result.push(self.input[self.pos]);
+                self.pos += 1;
+            } else {
+                return result;
+            }
+        }
+    }
+
+    fn consume_string(&mut self) -> String {
+        let mut result = String::new();
+        self.pos += 1;
+
+        loop {
+            if self.pos >= self.input.len() {
+                return result;
+            }
+
+            if self.input[self.pos] == '"' {
+                self.pos += 1;
+                return result;
+            }
+
+            result.push(self.input[self.pos]);
+            self.pos += 1;
+        }
+    }
 }
 
 impl Iterator for JsLexer {
@@ -59,6 +125,12 @@ impl Iterator for JsLexer {
             }
         }
 
+        if let Some(keyword) = self.check_reserved_word() {
+            self.pos += keyword.len();
+            let token = Some(Token::Keyword(keyword));
+            return token;
+        }
+
         let c = self.input[self.pos];
 
         let token = match c {
@@ -68,6 +140,8 @@ impl Iterator for JsLexer {
                 t
             }
             '0'..='9' => Token::Number(self.consume_number()),
+            'a'..='z' | 'A'..='Z' | '_' | '$' => Token::Identifier(self.consume_identifier()),
+            '"' => Token::StringLiteral(self.consume_string()),
             _ => unimplemented!("char {:?} is not supported yet", c),
         };
 
@@ -106,6 +180,91 @@ mod tests {
         let input = "1 + 2".to_string();
         let mut lexer = JsLexer::new(input).peekable();
         let expected = vec![Token::Number(1), Token::Punctuator('+'), Token::Number(2)];
+        let mut i = 0;
+        while lexer.peek().is_some() {
+            assert_eq!(Some(expected[i].clone()), lexer.next());
+            i += 1;
+        }
+        assert!(lexer.peek().is_none());
+    }
+
+    #[test]
+    fn test_assign_variables() {
+        let input = "var foo=\"bar\";".to_string();
+        let mut lexer = JsLexer::new(input).peekable();
+        let expected = [
+            Token::Keyword("var".to_string()),
+            Token::Identifier("foo".to_string()),
+            Token::Punctuator('='),
+            Token::StringLiteral("bar".to_string()),
+            Token::Punctuator(';'),
+        ]
+        .to_vec();
+        let mut i = 0;
+        while lexer.peek().is_some() {
+            assert_eq!(Some(expected[i].clone()), lexer.next());
+            i += 1;
+        }
+        assert!(lexer.peek().is_none());
+    }
+
+    #[test]
+    fn test_add_variable_and_num() {
+        let input = "var foo=42; var result=foo+1;".to_string();
+        let mut lexer = JsLexer::new(input).peekable();
+        let expected = [
+            Token::Keyword("var".to_string()),
+            Token::Identifier("foo".to_string()),
+            Token::Punctuator('='),
+            Token::Number(42),
+            Token::Punctuator(';'),
+            Token::Keyword("var".to_string()),
+            Token::Identifier("result".to_string()),
+            Token::Punctuator('='),
+            Token::Identifier("foo".to_string()),
+            Token::Punctuator('+'),
+            Token::Number(1),
+            Token::Punctuator(';'),
+        ]
+        .to_vec();
+        let mut i = 0;
+        while lexer.peek().is_some() {
+            assert_eq!(Some(expected[i].clone()), lexer.next());
+            i += 1;
+        }
+        assert!(lexer.peek().is_none());
+    }
+
+    #[test]
+    fn test_add_local_variable_and_num() {
+        let input = "function foo() { var a=42; return a; } var result=foo()+1;".to_string();
+        let mut lexer = JsLexer::new(input).peekable();
+        let expected = [
+            Token::Keyword("function".to_string()),
+            Token::Identifier("foo".to_string()),
+            Token::Punctuator('('),
+            Token::Punctuator(')'),
+            Token::Punctuator('{'),
+            Token::Keyword("var".to_string()),
+            Token::Identifier("a".to_string()),
+            Token::Punctuator('='),
+            Token::Number(42),
+            Token::Punctuator(';'),
+            Token::Keyword("return".to_string()),
+            Token::Identifier("a".to_string()),
+            Token::Punctuator(';'),
+            Token::Punctuator('}'),
+            Token::Keyword("var".to_string()),
+            Token::Identifier("result".to_string()),
+            Token::Punctuator('='),
+            Token::Identifier("foo".to_string()),
+            Token::Punctuator('('),
+            Token::Punctuator(')'),
+            Token::Punctuator('+'),
+            Token::Number(1),
+            Token::Punctuator(';'),
+        ]
+        .to_vec();
         let mut i = 0;
         while lexer.peek().is_some() {
             assert_eq!(Some(expected[i].clone()), lexer.next());
