@@ -1,9 +1,10 @@
 [package]
-name = "greet"
+name = "hello-world-impl"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ferris-says = "0.3.2"
 wit-bindgen-rt = { version = "0.39.0", features = ["bitflags"] }
 
 [lib]
@@ -17,9 +18,10 @@ strip = true
 lto = true
 
 [package.metadata.component]
-package = "component:greet"
+package = "component:hello-world-impl"
 
 [package.metadata.component.dependencies]
 
 [package.metadata.component.target]
-world = "greetable-provider"
+path = "../greet/wit"
+world = "hello-world"
