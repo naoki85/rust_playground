@@ -3,16 +3,37 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Mutex};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::channel::mpsc::{UnboundedReceiver, unbounded};
+use serde::Deserialize;
 use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
 use web_sys::{CanvasRenderingContext2d, HtmlImageElement};
 
 use crate::browser::{self, LoopClosure};
 
+#[derive(Deserialize, Clone)]
+pub struct SheetRect {
+    pub x: u16,
+    pub y: u16,
+    pub w: u16,
+    pub h: u16,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Cell {
+    pub frame: SheetRect,
+    pub sprite_source_size: SheetRect,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct Sheet {
+    pub frames: HashMap<String, Cell>,
+}
+
 #[async_trait(?Send)]
 pub trait Game {
     async fn initialize(&self) -> Result<Box<dyn Game>>;
     fn update(&mut self, keystate: &KeyState);
-    fn draw(&self, Renderer: &Renderer);
+    fn draw(&self, renderer: &Renderer);
 }
 
 const FRAME_SIZE: f32 = 1.0 / 60.0 * 1000.0;
@@ -117,6 +138,26 @@ impl Renderer {
                 destination.height.into(),
             )
             .expect("Drawing is throwing exceptions! Unrecoverable error.");
+        self.draw_rect(&Rect { x: destination.x.into(), y: destination.y.into(), width: destination.width.into(), height: destination.height.into() });
+    }
+
+    pub fn draw_entire_image(&self, image: &HtmlImageElement, position: &Point) {
+        self.context
+            .draw_image_with_html_image_element(image, position.x.into(), position.y.into())
+            .expect("Drawing is throwing exceptions! Unrecoverable error.");
+        self.draw_rect(&Rect { x: position.x.into(), y: position.y.into(), width: image.width() as f32, height: image.height() as f32 });
+    }
+
+    pub fn draw_rect(&self, bounding_box: &Rect) {
+        self.context.set_stroke_style_str("#FF0000");
+        self.context.begin_path();
+        self.context.rect(
+            bounding_box.x.into(),
+            bounding_box.y.into(),
+            bounding_box.width.into(),
+            bounding_box.height.into()
+        );
+        self.context.stroke();
     }
 }
 
@@ -125,6 +166,15 @@ pub struct Rect {
     pub y: f32,
     pub width: f32,
     pub height: f32,
+}
+
+impl Rect {
+    pub fn intersects(&self, rect: &Rect) -> bool {
+        self.x < (rect.x + rect.width)
+            && self.x + self.width > rect.x
+            && self.y < (rect.y + rect.height)
+            && self.y + self.height > rect.y
+    }
 }
 
 enum KeyPress {
@@ -199,4 +249,30 @@ impl KeyState {
 pub struct Point {
     pub x: i16,
     pub y: i16,
+}
+
+pub struct Image {
+    element: HtmlImageElement,
+    position: Point,
+    bounding_box: Rect,
+}
+
+impl Image {
+    pub fn new(element: HtmlImageElement, position: Point) -> Self {
+        let bounding_box = Rect {
+            x: position.x.into(),
+            y: position.y.into(),
+            width: element.width() as f32,
+            height: element.height() as f32
+        };
+        Self { element, position, bounding_box }
+    }
+
+    pub fn draw(&self, renderer: &Renderer) {
+        renderer.draw_entire_image(&self.element, &self.position);
+    }
+
+    pub fn bounding_box(&self) -> &Rect {
+        &self.bounding_box
+    }
 }

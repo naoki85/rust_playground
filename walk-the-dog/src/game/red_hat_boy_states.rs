@@ -1,17 +1,20 @@
 use crate::engine::Point;
 
 use super::RedHatBoyStateMachine;
-const FLOOR: i16 = 475;
+const FLOOR: i16 = 479;
+const STARTING_POINT: i16 = -20;
 const IDLE_FRAME_NAME: &str = "Idle";
 const RUN_FRAME_NAME: &str = "Run";
 const SLIDING_FRAME_NAME: &str = "Slide";
 const JUMPING_FRAME_NAME: &str = "Jump";
+const FALING_FRAME_NAME: &str = "Dead";
 const IDLE_FRAMES: u8 = 29;
 const RUNNING_FRAMES: u8 = 23;
 const RUNNING_SPEED: i16 = 3;
 const SLIDING_FRAMES: u8 = 14;
 const JUMPING_FRAMES: u8 = 35;
 const JUMP_SPEED: i16 = -25;
+const FALING_FRAMES: u8 = 29;
 const GRAVITY: i16 = 1;
 
 
@@ -32,7 +35,7 @@ impl RedHatBoyState<Idle> {
         RedHatBoyState {
             context: RedHatBoyContext {
                 frame: 0,
-                position: Point { x: 0, y: FLOOR },
+                position: Point { x: STARTING_POINT, y: FLOOR },
                 velocity: Point { x: 0, y: 0 },
             },
             _state: Idle {},
@@ -74,6 +77,13 @@ impl RedHatBoyState<Running> {
         _state: Jumping {},
       }
     }
+
+    pub fn knock_out(self) -> RedHatBoyState<Falling> {
+      RedHatBoyState {
+        context: self.context.reset_frame().stop(),
+        _state: Falling {},
+      }
+    }
 }
 
 impl RedHatBoyState<Sliding> {
@@ -94,6 +104,13 @@ impl RedHatBoyState<Sliding> {
     pub fn stand(self) -> RedHatBoyState<Running> {
       RedHatBoyState { context: self.context.reset_frame(), _state: Running, }
     }
+
+    pub fn knock_out(self) -> RedHatBoyState<Falling> {
+      RedHatBoyState {
+        context: self.context,
+        _state: Falling {},
+      }
+    }
 }
 
 impl RedHatBoyState<Jumping> {
@@ -104,16 +121,53 @@ impl RedHatBoyState<Jumping> {
     pub fn update(mut self) -> JumpingEndState {
       self.context = self.context.update(JUMPING_FRAMES);
       if self.context.position.y >= FLOOR {
-        JumpingEndState::Complete(self.land())
+        JumpingEndState::Complete(self.land_on(FLOOR as f32))
       } else {
         JumpingEndState::Jumping(self)
       }
     }
 
-    pub fn land(self) -> RedHatBoyState<Running> {
+    pub fn land_on(mut self, position: f32) -> RedHatBoyState<Running> {
+      self.context.position.y = position as i16;
       RedHatBoyState { context: self.context.reset_frame(), _state: Running, } 
     }
+
+    pub fn knock_out(self) -> RedHatBoyState<Falling> {
+      RedHatBoyState {
+        context: self.context,
+        _state: Falling {},
+      }
+    }
 }
+
+impl RedHatBoyState<Falling> {
+    pub fn frame_name(&self) -> &str {
+      FALING_FRAME_NAME
+    }
+
+    pub fn update(mut self) -> FallingEndState {
+      self.context = self.context.update(FALING_FRAMES);
+
+      if self.context.frame >= FALING_FRAMES {
+        FallingEndState::KnockedOut(self.knock_out())
+      } else {
+        FallingEndState::Falling(self) 
+      }
+    }
+
+    pub fn knock_out(self) -> RedHatBoyState<KnockedOut> {
+      RedHatBoyState {
+        context: self.context,
+        _state: KnockedOut {},
+      }
+    }
+}
+
+impl RedHatBoyState<KnockedOut> {
+    pub fn frame_name(&self) -> &str {
+      FALING_FRAME_NAME
+    }
+  }
 
 pub enum SlidingEndState {
   Complete(RedHatBoyState<Running>),
@@ -123,6 +177,11 @@ pub enum SlidingEndState {
 pub enum JumpingEndState {
   Complete(RedHatBoyState<Running>),
   Jumping(RedHatBoyState<Jumping>),
+}
+
+pub enum FallingEndState {
+  KnockedOut(RedHatBoyState<KnockedOut>),
+  Falling(RedHatBoyState<Falling>),
 }
 
 impl From<SlidingEndState> for RedHatBoyStateMachine {
@@ -139,6 +198,15 @@ impl From<JumpingEndState> for RedHatBoyStateMachine {
     match end_state {
       JumpingEndState::Complete(running_state) => running_state.into(),
       JumpingEndState::Jumping(jumping_state) => jumping_state.into(),
+    }
+  }
+}
+
+impl From<FallingEndState> for RedHatBoyStateMachine {
+  fn from(end_state: FallingEndState) -> Self {
+    match end_state {
+      FallingEndState::Falling(falling) => falling.into(),
+      FallingEndState::KnockedOut(knocked_out) => knocked_out.into(),
     }
   }
 }
@@ -183,6 +251,11 @@ impl RedHatBoyContext {
     self.velocity.y = y;
     self
   }
+
+  fn stop(mut self) -> Self {
+    self.velocity.x = 0;
+    self
+  }
 }
 
 #[derive(Copy, Clone)]
@@ -193,3 +266,7 @@ pub struct Running;
 pub struct Sliding;
 #[derive(Copy, Clone)]
 pub struct Jumping;
+#[derive(Copy, Clone)]
+pub struct Falling;
+#[derive(Copy, Clone)]
+pub struct KnockedOut;
