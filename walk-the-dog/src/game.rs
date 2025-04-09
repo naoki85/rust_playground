@@ -10,6 +10,8 @@ use crate::{
     engine::{self, Cell, Game, Image, KeyState, Point, Rect, Renderer, Sheet},
 };
 
+const HEIGHT: i16 = 600;
+
 pub struct Walk {
     boy: RedHatBoy,
     background: Image,
@@ -81,9 +83,16 @@ impl Game for WalkTheDog {
 
             walk.boy.update();
 
-            if walk.boy.bounding_box().intersects(&walk.platform.bounding_box()) {
-                walk.boy.land_on();
+            for bounding_box in &walk.platform.bounding_boxes() {
+                if walk.boy.bounding_box().intersects(bounding_box) {
+                    if walk.boy.velocity_y() > 0 && walk.boy.pos_y() < walk.platform.position.y {
+                        walk.boy.land_on(bounding_box.y);
+                    } else {
+                        walk.boy.knock_out();
+                    }
+                }
             }
+
 
             if walk.boy.bounding_box().intersects(walk.stone.bounding_box()) {
                 walk.boy.knock_out();
@@ -95,7 +104,7 @@ impl Game for WalkTheDog {
         renderer.clear(&Rect {
             x: 0.0,
             y: 0.0,
-            width: 600.0,
+            width: HEIGHT as f32,
             height: 600.0,
         });
         if let WalkTheDog::Loaded(walk) = self {
@@ -153,13 +162,40 @@ impl From<RedHatBoyState<KnockedOut>> for RedHatBoyStateMachine {
     }
 }
 
+impl From<SlidingEndState> for RedHatBoyStateMachine {
+    fn from(state: SlidingEndState) -> Self {
+        match state {
+            SlidingEndState::Sliding(sliding) => sliding.into(),
+            SlidingEndState::Running(running) => running.into(),
+        }
+    }
+}
+
+impl From<JumpingEndState> for RedHatBoyStateMachine {
+    fn from(state: JumpingEndState) -> Self {
+        match state {
+            JumpingEndState::Jumping(jumping) => jumping.into(),
+            JumpingEndState::Landing(landing) => landing.into(),
+        }
+    }
+}
+
+impl From<FallingEndState> for RedHatBoyStateMachine {
+    fn from(state: FallingEndState) -> Self {
+        match state {
+            FallingEndState::Falling(falling) => falling.into(),
+            FallingEndState::KnockedOut(knocked_out) => knocked_out.into(),
+        }
+    }
+}
+
 pub enum Event {
     Run,
     Slide,
     Update,
     Jump,
     KnockOut,
-    Land,
+    Land(f32),
 }
 
 impl RedHatBoyStateMachine {
@@ -176,7 +212,15 @@ impl RedHatBoyStateMachine {
             (RedHatBoyStateMachine::Jumping(state), Event::KnockOut) => state.knock_out().into(),
             (RedHatBoyStateMachine::Sliding(state), Event::KnockOut) => state.knock_out().into(),
             (RedHatBoyStateMachine::Falling(state), Event::Update) => state.update().into(),
-            (RedHatBoyStateMachine::Jumping(state), Event::Land) => state.land_on(state.context().position.y.into()).into(),
+            (RedHatBoyStateMachine::Running(state), Event::Land(position)) => {
+                state.land_on(position).into()
+            },
+            (RedHatBoyStateMachine::Jumping(state), Event::Land(position)) =>  {
+                state.land_on(position).into()
+            },
+            (RedHatBoyStateMachine::Sliding(state), Event::Land(position)) => {
+                state.land_on(position).into()
+            }, 
             _ => self,
         }
     }
@@ -224,17 +268,7 @@ impl RedHatBoy {
     }
 
     fn draw(&self, renderer: &Renderer) {
-        let frame_name = format!(
-            "{} ({}).png",
-            self.state_machine.frame_name(),
-            (self.state_machine.context().frame / 3) + 1
-        );
-
-        let sprite = self
-            .sprite_sheet
-            .frames
-            .get(&frame_name)
-            .expect("Cell not found");
+        let sprite = self.current_sprite().expect("Cell not found");
 
         renderer.draw_image(
             &self.image,
@@ -244,7 +278,7 @@ impl RedHatBoy {
                 width: sprite.frame.w.into(),
                 height: sprite.frame.h.into(),
             },
-            &self.bounding_box(),
+            &self.destination_box(),
         );
     }
 
@@ -264,8 +298,16 @@ impl RedHatBoy {
         self.state_machine = self.state_machine.transition(Event::Jump);
     }
 
-    fn land_on(mut self) {
-        self.state_machine = self.state_machine.transition(Event::Land);
+    fn land_on(&mut self, position: f32) {
+        self.state_machine = self.state_machine.transition(Event::Land(position));
+    }
+
+    fn pos_y(&self) -> i16 {
+        self.state_machine.context().position.y
+    }
+
+    fn velocity_y(&self) -> i16 {
+        self.state_machine.context().velocity.y
     }
 
     fn frame_name(&self) -> String {
@@ -283,15 +325,25 @@ impl RedHatBoy {
     }
 
     fn bounding_box(&self) -> Rect {
-        let sprite = self
-            .current_sprite()
-            .expect("Cell not found");
+        const X_OFFSET: f32 = 18.0;
+        const Y_OFFSET: f32 = 14.0;
+        const WIDTH_OFFSET: f32 = 28.0;
+        let mut bounding_box = self.destination_box();
+        bounding_box.x += X_OFFSET;
+        bounding_box.width -= WIDTH_OFFSET;
+        bounding_box.y += Y_OFFSET;
+        bounding_box.height -= Y_OFFSET;
+        bounding_box
+    }
+
+    fn destination_box(&self) -> Rect {
+        let sprite = self.current_sprite().expect("Cell not found");
 
         Rect {
-            x: (self.state_machine.context().position.x 
-                + sprite.sprite_source_size.x as i16).into(),
-            y: (self.state_machine.context().position.y
-                + sprite.sprite_source_size.y as i16).into(),
+            x: (self.state_machine.context().position.x + sprite.sprite_source_size.x as i16)
+                .into(),
+            y: (self.state_machine.context().position.y + sprite.sprite_source_size.y as i16)
+                .into(),
             width: sprite.frame.w.into(),
             height: sprite.frame.h.into(),
         }
@@ -317,7 +369,7 @@ impl Platform {
         }
     }
 
-    fn bounding_box(&self) -> Rect {
+    fn destination_box(&self) -> Rect {
         let platform = self
             .sheet
             .frames
@@ -347,7 +399,35 @@ impl Platform {
                 width: (platform.frame.w * 3).into(),
                 height: platform.frame.h.into(),
             },
-        &self.bounding_box(),
+        &self.destination_box(),
         );
+    }
+
+    fn bounding_boxes(&self) -> Vec<Rect> {
+        const X_OFFSET: f32 = 60.0;
+        const END_HEIGHT: f32 = 54.0;
+        let destination_box = self.destination_box();
+        let bounding_box_one = Rect {
+            x: destination_box.x,
+            y: destination_box.y,
+            width: X_OFFSET,
+            height: END_HEIGHT,
+        };
+
+        let bounding_box_two = Rect {
+            x: destination_box.x + X_OFFSET,
+            y: destination_box.y,
+            width: destination_box.width - (X_OFFSET * 2.0),
+            height: destination_box.height,
+        };
+
+        let bounding_box_three = Rect {
+            x: destination_box.x + destination_box.width - X_OFFSET,
+            y: destination_box.y,
+            width: X_OFFSET,
+            height: END_HEIGHT,
+        };
+
+        vec![bounding_box_one, bounding_box_two, bounding_box_three]
     }
 }
