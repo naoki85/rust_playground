@@ -159,7 +159,7 @@ impl Game for WalkTheDog {
     }
 
     fn draw(&self, renderer: &Renderer) {
-        renderer.clear(&Rect::new_from_x_y(0, 0, HEIGHT, 600));
+        renderer.clear(&Rect::new_from_x_y(0, 0, 600, HEIGHT));
         if let WalkTheDog::Loaded(walk) = self {
             walk.backgrounds.iter().for_each(|background| {
                 background.draw(renderer);
@@ -331,7 +331,7 @@ impl RedHatBoy {
             &Rect::new_from_x_y(
                 sprite.frame.x.into(),
                 sprite.frame.y.into(),
-            sprite.frame.w.into(),
+                sprite.frame.w.into(),
                 sprite.frame.h.into(),
         ),
             &self.destination_box(),
@@ -438,20 +438,6 @@ impl Platform {
             sprites,
             bounding_boxes,
         }
-    }
-
-    fn destination_box(&self) -> Rect {
-        let platform = self
-            .sheet
-            .cell("13.png")
-            .expect("13.png does not exist");
-
-        Rect::new_from_x_y(
-            self.position.x.into(),
-            self.position.y.into(),
-            (platform.frame.w * 3).into(),
-            platform.frame.h.into(),
-        )
     }
 
     fn bounding_boxes(&self) -> &Vec<Rect> {

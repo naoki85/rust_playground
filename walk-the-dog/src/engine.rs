@@ -217,7 +217,7 @@ impl Rect {
     }
 
     pub fn intersects(&self, rect: &Rect) -> bool {
-        self.x ()< self.right()
+        self.x () < rect.right()
             && self.right() > rect.x()
             && self.y() < rect.bottom()
             && self.bottom() > rect.y()
@@ -331,7 +331,7 @@ impl Image {
     }
 
     pub fn move_horizontally(&mut self, distance: i16) {
-        self.bounding_box.set_x(self.bounding_box().x() + distance);
+        self.bounding_box.set_x(self.bounding_box.x() + distance);
     }
 
     pub fn set_x(&mut self, x: i16) {
