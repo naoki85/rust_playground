@@ -105,7 +105,7 @@ const TERMINAL_VELOCITY: i16 = 20;
             }
         }
 
-        pub fn land_on(self, position: f32) -> RedHatBoyState<Running> {
+        pub fn land_on(self, position: i16) -> RedHatBoyState<Running> {
             RedHatBoyState {
                 context: self.context.set_on(position as i16),
                 _state: Running {},
@@ -143,7 +143,7 @@ const TERMINAL_VELOCITY: i16 = 20;
             }
         }
 
-        pub fn land_on(self, position: f32) -> RedHatBoyState<Running> {
+        pub fn land_on(self, position: i16) -> RedHatBoyState<Running> {
             RedHatBoyState {
                 context: self.context.reset_frame().set_on(position as i16),
                 _state: Running,
@@ -188,7 +188,7 @@ const TERMINAL_VELOCITY: i16 = 20;
             }
         }
 
-        pub fn land_on(self, position: f32) -> RedHatBoyState<Sliding> {
+        pub fn land_on(self, position: i16) -> RedHatBoyState<Sliding> {
             RedHatBoyState {
                 context: self.context.set_on(position as i16),
                 _state: Sliding {},
@@ -254,7 +254,6 @@ const TERMINAL_VELOCITY: i16 = 20;
                 self.frame = 0;
             }
 
-            self.position.x += self.velocity.x;
             self.position.y += self.velocity.y;
 
             if self.position.y > FLOOR {
