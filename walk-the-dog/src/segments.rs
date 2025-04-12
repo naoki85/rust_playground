@@ -4,7 +4,7 @@ use web_sys::HtmlImageElement;
 
 use crate::{engine::{Image, Point, Rect, SpriteSheet}, game::{Barrier, Obstacle, Platform}};
 
-const INITIAL_STONE_OFFSET: i16 = 150;
+const INITIAL_STONE_OFFSET: i16 = 300;
 const FIRST_PLATFORM: i16 = 370;
 const HIGH_PLATFORM: i16 = 375;
 const LOW_PLATFORM: i16 = 420;
