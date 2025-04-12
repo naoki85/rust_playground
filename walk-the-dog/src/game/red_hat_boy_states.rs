@@ -107,7 +107,7 @@ const TERMINAL_VELOCITY: i16 = 20;
 
         pub fn land_on(self, position: i16) -> RedHatBoyState<Running> {
             RedHatBoyState {
-                context: self.context.set_on(position as i16),
+                context: self.context.set_on(position),
                 _state: Running {},
             }
         }
@@ -190,7 +190,7 @@ const TERMINAL_VELOCITY: i16 = 20;
 
         pub fn land_on(self, position: i16) -> RedHatBoyState<Sliding> {
             RedHatBoyState {
-                context: self.context.set_on(position as i16),
+                context: self.context.set_on(position),
                 _state: Sliding {},
             }
         }

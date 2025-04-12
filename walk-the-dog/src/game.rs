@@ -10,7 +10,8 @@ use web_sys::HtmlImageElement;
 
 use crate::{
     browser,
-    engine::{self, Cell, Game, Image, KeyState, Point, Rect, Renderer, Sheet, SpriteSheet}, segments::{platform_and_stone, stone_and_platform},
+    engine::{self, Cell, Game, Image, KeyState, Point, Rect, Renderer, Sheet, SpriteSheet},
+    segments::*,
 };
 
 const HEIGHT: i16 = 600;
@@ -60,7 +61,7 @@ pub enum WalkTheDog {
 
 impl WalkTheDog {
     pub fn new() -> Self {
-        Self::Loading
+        Self::Loading {}
     }
 }
 
@@ -329,10 +330,10 @@ impl RedHatBoy {
         renderer.draw_image(
             &self.image,
             &Rect::new_from_x_y(
-                sprite.frame.x.into(),
-                sprite.frame.y.into(),
-                sprite.frame.w.into(),
-                sprite.frame.h.into(),
+                sprite.frame.x,
+                sprite.frame.y,
+                sprite.frame.w,
+                sprite.frame.h,
         ),
             &self.destination_box(),
         );
@@ -395,10 +396,8 @@ impl RedHatBoy {
         let sprite = self.current_sprite().expect("Cell not found");
 
         Rect::new_from_x_y(
-            (self.state_machine.context().position.x + sprite.sprite_source_size.x as i16)
-                .into(),
-            (self.state_machine.context().position.y + sprite.sprite_source_size.y as i16)
-                .into(),
+            self.state_machine.context().position.x + sprite.sprite_source_size.x,
+            self.state_machine.context().position.y + sprite.sprite_source_size.y,
             sprite.frame.w,
             sprite.frame.h,
         )
@@ -422,7 +421,7 @@ pub struct Platform {
 
 impl Platform {
     pub fn new(sheet: Rc<SpriteSheet>, position: Point, sprite_names: &[&str], bounding_boxes: &[Rect]) -> Self {
-        let sprites = sprite_names.iter().filter_map(|sprite_name| sheet.cell(&sprite_name).cloned()).collect();
+        let sprites = sprite_names.iter().filter_map(|sprite_name| sheet.cell(sprite_name).cloned()).collect();
         let bounding_boxes = bounding_boxes.iter().map(|bounding_box| {
             Rect::new_from_x_y(
                 bounding_box.x() + position.x,

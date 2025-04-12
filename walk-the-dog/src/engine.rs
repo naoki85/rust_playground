@@ -2,7 +2,10 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Mutex};
 
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use futures::channel::mpsc::{UnboundedReceiver, unbounded};
+use futures::channel::{
+    mpsc::{unbounded, UnboundedReceiver},
+    oneshot::channel,
+};
 use serde::Deserialize;
 use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
 use web_sys::{CanvasRenderingContext2d, HtmlImageElement};
@@ -108,7 +111,7 @@ impl GameLoop {
 pub async fn load_image(source: &str) -> Result<HtmlImageElement> {
     let image = browser::new_image()?;
 
-    let (complete_tx, complete_rx) = futures::channel::oneshot::channel::<Result<()>>();
+    let (complete_tx, complete_rx) = channel::<Result<()>>();
     let success_tx = Rc::new(Mutex::new(Some(complete_tx)));
     let error_tx = Rc::clone(&success_tx);
 
@@ -178,7 +181,7 @@ impl Renderer {
             bounding_box.x().into(),
             bounding_box.y().into(),
             bounding_box.width.into(),
-            bounding_box.height.into()
+            bounding_box.height.into(),
         );
         self.context.stroke();
     }
@@ -192,7 +195,7 @@ pub struct Rect {
 }
 
 impl Rect {
-    pub fn new(position: Point, width: i16, height: i16) -> Self {
+    pub const fn new(position: Point, width: i16, height: i16) -> Self {
         Rect {
             position,
             width,
@@ -201,11 +204,7 @@ impl Rect {
     }
 
     pub const fn new_from_x_y(x: i16, y: i16, width: i16, height: i16) -> Self {
-        Rect {
-            position: Point { x, y },
-            width,
-            height,
-        }
+        Rect::new(Point { x, y }, width, height)
     }
 
     pub fn x(&self) -> i16 {
@@ -217,7 +216,7 @@ impl Rect {
     }
 
     pub fn intersects(&self, rect: &Rect) -> bool {
-        self.x () < rect.right()
+        self.x() < rect.right()
             && self.right() > rect.x()
             && self.y() < rect.bottom()
             && self.bottom() > rect.y()
@@ -232,7 +231,7 @@ impl Rect {
     }
 
     pub fn set_x(&mut self, x: i16) {
-        self.position.x = x;
+        self.position.x = x
     }
 }
 
@@ -256,12 +255,9 @@ fn prepare_input() -> Result<UnboundedReceiver<KeyPress>> {
             .borrow_mut()
             .start_send(KeyPress::KeyUp(keycode));
     }) as Box<dyn FnMut(web_sys::KeyboardEvent)>);
-    browser::canvas()
-        .unwrap()
-        .set_onkeydown(Some(onkeydown.as_ref().unchecked_ref()));
-    browser::canvas()
-        .unwrap()
-        .set_onkeyup(Some(onkeyup.as_ref().unchecked_ref()));
+
+    browser::canvas()?.set_onkeydown(Some(onkeydown.as_ref().unchecked_ref()));
+    browser::canvas()?.set_onkeyup(Some(onkeyup.as_ref().unchecked_ref()));
     onkeydown.forget();
     onkeyup.forget();
     Ok(keyevent_receiver)
@@ -276,7 +272,7 @@ fn process_input(state: &mut KeyState, keyevent_receiver: &mut UnboundedReceiver
                 KeyPress::KeyUp(evt) => state.set_released(&evt.code()),
                 KeyPress::KeyDown(evt) => state.set_pressed(&evt.code(), evt),
             },
-        }
+        };
     }
 }
 
@@ -295,11 +291,11 @@ impl KeyState {
         self.pressed_keys.contains_key(code)
     }
 
-    pub fn set_pressed(&mut self, code: &str, event: web_sys::KeyboardEvent) {
+    fn set_pressed(&mut self, code: &str, event: web_sys::KeyboardEvent) {
         self.pressed_keys.insert(code.into(), event);
     }
 
-    pub fn set_released(&mut self, code: &str) {
+    fn set_released(&mut self, code: &str) {
         self.pressed_keys.remove(code.into());
     }
 }
@@ -312,18 +308,21 @@ pub struct Point {
 
 pub struct Image {
     element: HtmlImageElement,
-    position: Point,
     bounding_box: Rect,
 }
 
 impl Image {
     pub fn new(element: HtmlImageElement, position: Point) -> Self {
         let bounding_box = Rect::new(position, element.width() as i16, element.height() as i16);
-        Self { element, position, bounding_box }
+
+        Self {
+            element,
+            bounding_box,
+        }
     }
 
     pub fn draw(&self, renderer: &Renderer) {
-        renderer.draw_entire_image(&self.element, &self.position);
+        renderer.draw_entire_image(&self.element, &self.bounding_box.position)
     }
 
     pub fn bounding_box(&self) -> &Rect {
@@ -331,7 +330,7 @@ impl Image {
     }
 
     pub fn move_horizontally(&mut self, distance: i16) {
-        self.bounding_box.set_x(self.bounding_box.x() + distance);
+        self.set_x(self.bounding_box.x() + distance);
     }
 
     pub fn set_x(&mut self, x: i16) {
