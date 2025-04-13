@@ -48,7 +48,7 @@ impl<T> WalkTheDogState<T> {
 pub struct Ready;
 pub struct Walking;
 pub struct GameOver {
-    new_game_event: UnboundedReceiver<()>,
+    pub new_game_event: UnboundedReceiver<()>,
 }
 
 impl GameOver {
@@ -160,8 +160,11 @@ impl WalkTheDogState<GameOver> {
         }
     }
 
-    fn new_game(self) -> WalkTheDogState<Ready> {
-        browser::hide_ui();
+    pub fn new_game(self) -> WalkTheDogState<Ready> {
+        if let Err(err) = browser::hide_ui() {
+            error!("Error hiding the browser {:#?}", err);
+        }
+
         WalkTheDogState {
             _state: Ready,
             walk: Walk::reset(self.walk),

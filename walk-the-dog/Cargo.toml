@@ -62,8 +62,9 @@ features = ["console",
             "AudioBuffer",
             "AudioBufferSourceNode",
             "AudioDestinationNode",
+            "AudioBufferOptions",
             ]
 
 # These crates are used for running unit tests.
 [dev-dependencies]
-wasm-bindgen-test = "0.2.45"
+wasm-bindgen-test = "0.3.50"
