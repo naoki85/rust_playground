@@ -10,7 +10,7 @@ use web_sys::HtmlImageElement;
 
 use crate::{
     browser,
-    engine::{self, Cell, Game, Image, KeyState, Point, Rect, Renderer, Sheet, SpriteSheet},
+    engine::{self, Audio, Cell, Game, Image, KeyState, Point, Rect, Renderer, Sheet, Sound, SpriteSheet},
     segments::*,
 };
 
@@ -86,9 +86,16 @@ impl Game for WalkTheDog {
                     .expect("Could not convert rhb.json into a Sheet structure");
                 let image = Some(engine::load_image("rhb.png").await?);
 
+                let audio = Audio::new()?;
+                let sound = audio.load_sound("SFX_Jump_23.mp3").await?;
+                let background_music = audio.load_sound("background_song.mp3").await?;
+                audio.play_looping_sound(&background_music)?;
+
                 let rhb = RedHatBoy::new(
                     sheet.clone().ok_or_else(|| anyhow!("No Sheet Present"))?,
                     image.clone().ok_or_else(|| anyhow!("No Image Present"))?,
+                    audio,
+                    sound,
                 );
                 let background_width = background.width() as i16;
 
@@ -173,7 +180,7 @@ impl Game for WalkTheDog {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub enum RedHatBoyStateMachine {
     Idle(RedHatBoyState<Idle>),
     Running(RedHatBoyState<Running>),
@@ -257,7 +264,7 @@ pub enum Event {
 
 impl RedHatBoyStateMachine {
     fn transition(self, event: Event) -> Self {
-        match (self, event) {
+        match (self.clone(), event) {
             (RedHatBoyStateMachine::Idle(state), Event::Run) => state.run().into(),
             (RedHatBoyStateMachine::Running(state), Event::Slide) => state.slide().into(),
             (RedHatBoyStateMachine::Idle(state), Event::Update) => state.update().into(),
@@ -316,9 +323,9 @@ pub struct RedHatBoy {
 }
 
 impl RedHatBoy {
-    fn new(sheet: Sheet, image: HtmlImageElement) -> Self {
+    fn new(sheet: Sheet, image: HtmlImageElement, audio: Audio, sound: Sound) -> Self {
         RedHatBoy {
-            state_machine: RedHatBoyStateMachine::Idle(RedHatBoyState::new()),
+            state_machine: RedHatBoyStateMachine::Idle(RedHatBoyState::new(audio, sound)),
             sprite_sheet: sheet,
             image,
         }
@@ -340,23 +347,23 @@ impl RedHatBoy {
     }
 
     fn update(&mut self) {
-        self.state_machine = self.state_machine.update();
+        self.state_machine = self.state_machine.clone().update();
     }
 
     fn run_right(&mut self) {
-        self.state_machine = self.state_machine.transition(Event::Run);
+        self.state_machine = self.state_machine.clone().transition(Event::Run);
     }
 
     fn slide(&mut self) {
-        self.state_machine = self.state_machine.transition(Event::Slide);
+        self.state_machine = self.state_machine.clone().transition(Event::Slide);
     }
 
     fn jump(&mut self) {
-        self.state_machine = self.state_machine.transition(Event::Jump);
+        self.state_machine = self.state_machine.clone().transition(Event::Jump);
     }
 
     fn land_on(&mut self, position: i16) {
-        self.state_machine = self.state_machine.transition(Event::Land(position));
+        self.state_machine = self.state_machine.clone().transition(Event::Land(position));
     }
 
     fn pos_y(&self) -> i16 {
@@ -404,7 +411,7 @@ impl RedHatBoy {
     }
 
     fn knock_out(&mut self) {
-        self.state_machine = self.state_machine.transition(Event::KnockOut);
+        self.state_machine = self.state_machine.clone().transition(Event::KnockOut);
     }
 
     fn walking_speed(&self) -> i16 {

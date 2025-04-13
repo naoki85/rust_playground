@@ -1,4 +1,4 @@
-use crate::engine::Point;
+use crate::engine::{Audio, Point, Sound};
 
 use super::HEIGHT;
 const PLAYER_HEIGHT: i16 = HEIGHT - FLOOR;
@@ -19,7 +19,7 @@ const FALLING_FRAMES: u8 = 29;
 const GRAVITY: i16 = 1;
 const TERMINAL_VELOCITY: i16 = 20;
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct RedHatBoyState<S> {
     context: RedHatBoyContext,
     _state: S,
@@ -31,7 +31,7 @@ impl<S> RedHatBoyState<S> {
     }
 
     fn update_context(&mut self, frames: u8) {
-        self.context = self.context.update(frames);
+        self.context = self.context.clone().update(frames);
     }
 }
 
@@ -39,7 +39,7 @@ impl<S> RedHatBoyState<S> {
 pub struct Idle;
 
 impl RedHatBoyState<Idle> {
-    pub fn new() -> Self {
+    pub fn new(audio: Audio, jump_sound: Sound) -> Self {
         RedHatBoyState {
             context: RedHatBoyContext {
                 frame: 0,
@@ -48,6 +48,8 @@ impl RedHatBoyState<Idle> {
                     y: FLOOR,
                 },
                 velocity: Point { x: 0, y: 0 },
+                audio,
+                jump_sound,
             },
             _state: Idle {},
         }
@@ -85,7 +87,7 @@ impl RedHatBoyState<Running> {
 
     pub fn jump(self) -> RedHatBoyState<Jumping> {
         RedHatBoyState {
-            context: self.context.reset_frame().set_vertical_velocity(JUMP_SPEED),
+            context: self.context.reset_frame().set_vertical_velocity(JUMP_SPEED).play_jump_sound(),
             _state: Jumping {},
         }
     }
@@ -234,11 +236,13 @@ impl RedHatBoyState<KnockedOut> {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct RedHatBoyContext {
     pub frame: u8,
     pub position: Point,
     pub velocity: Point,
+    audio: Audio,
+    jump_sound: Sound,
 }
 
 impl RedHatBoyContext {
@@ -286,6 +290,13 @@ impl RedHatBoyContext {
     fn set_on(mut self, position: i16) -> Self {
         let position = position - PLAYER_HEIGHT;
         self.position.y = position;
+        self
+    }
+
+    fn play_jump_sound(self) -> Self {
+        if let Err(err) = self.audio.play_sound(&self.jump_sound) {
+            log!("Error playing jump sound {:#?}", err);
+        }
         self
     }
 }
