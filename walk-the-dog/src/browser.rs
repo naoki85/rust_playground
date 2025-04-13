@@ -6,7 +6,7 @@ use wasm_bindgen::{
 };
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlImageElement, Response, Window,
+    CanvasRenderingContext2d, Document, Element, HtmlCanvasElement, HtmlElement, HtmlImageElement, Response, Window
 };
 
 macro_rules! log {
@@ -61,10 +61,10 @@ pub async fn fetch_with_str(resource: &str) -> Result<JsValue> {
 }
 
 pub async fn fetch_response(resource: &str) -> Result<Response> {
-    fetch_with_str(resource).await?.dyn_into()
-    .map_err(|element| {
-        anyhow!("Error converting {:#?} to Response", element)
-    })
+    fetch_with_str(resource)
+        .await?
+        .dyn_into()
+        .map_err(|element| anyhow!("Error converting {:#?} to Response", element))
 }
 
 pub async fn fetch_json(json_path: &str) -> Result<JsValue> {
@@ -80,13 +80,15 @@ pub async fn fetch_json(json_path: &str) -> Result<JsValue> {
 
 pub async fn fetch_array_buffer(resource: &str) -> Result<ArrayBuffer> {
     let array_buffer = fetch_response(resource)
-    .await?
-    .array_buffer().map_err(|err| anyhow!("Error loading array buffer {:#?}", err))?;
+        .await?
+        .array_buffer()
+        .map_err(|err| anyhow!("Error loading array buffer {:#?}", err))?;
 
-    JsFuture::from(array_buffer).await
-    .map_err(|err| anyhow!("error converting array buffer into a future {:#?}", err))?
-    .dyn_into()
-    .map_err(|err| anyhow!("Error converting raw JSValue to ArrayBuffer {:#?}", err))
+    JsFuture::from(array_buffer)
+        .await
+        .map_err(|err| anyhow!("error converting array buffer into a future {:#?}", err))?
+        .dyn_into()
+        .map_err(|err| anyhow!("Error converting raw JSValue to ArrayBuffer {:#?}", err))
 }
 
 pub fn new_image() -> Result<HtmlImageElement> {
@@ -120,4 +122,46 @@ pub fn now() -> Result<f64> {
         .performance()
         .ok_or_else(|| anyhow!("Performance object not found"))?
         .now())
+}
+
+pub fn draw_ui(html: &str) -> Result<()> {
+    find_ui()?
+        .insert_adjacent_html("afterbegin", html)
+        .map_err(|err| anyhow!("Could not insert html {:#?}", err))
+}
+
+pub fn hide_ui() -> Result<()> {
+    let ui = find_ui()?;
+
+    if let Some(child) = ui.first_child() {
+        ui.remove_child(&child)
+            .map(|_remove_child| ())
+            .map_err(|err| anyhow!("Could not remove child from UI {:#?}", err))
+            .and_then(|_unit| {
+                canvas()?
+                .focus()
+                .map_err(|err| anyhow!("Could not set focus to canvas {:#?}", err))
+            })
+    } else {
+        Ok(())
+    }
+}
+
+fn find_ui() -> Result<Element> {
+    document().and_then(|doc| {
+        doc.get_element_by_id("ui")
+            .ok_or_else(|| anyhow!("No UI element found"))
+    })
+}
+
+pub fn find_html_element_by_id(id: &str) -> Result<HtmlElement> {
+    document()
+        .and_then(|doc| {
+            doc.get_element_by_id(id)
+                .ok_or_else(|| anyhow!("No element found with id {:#?}", id))
+        })
+        .and_then(|elem| {
+            elem.dyn_into::<HtmlElement>()
+                .map_err(|err| anyhow!("Could not cast into HTMLElement {:#?}", err))
+        })
 }
